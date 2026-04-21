@@ -1,0 +1,227 @@
+import { useState } from 'react'
+import { Tournament, TournamentSettings, Player, Locale, Screen, GameScore } from './types'
+import { scheduleRound } from './utils/scheduler'
+import { calculateStandings } from './utils/standings'
+import { saveTournament, loadTournament, clearTournament, saveLocale, loadLocale } from './utils/storage'
+import { SetupForm } from './components/SetupForm'
+import { PlayerEntry } from './components/PlayerEntry'
+import { RoundView } from './components/RoundView'
+import { StandingsTable } from './components/StandingsTable'
+import { FlagIcon } from './components/FlagIcon'
+import './App.css'
+
+function deriveScreen(t: Tournament | null): Screen {
+  if (!t) return 'setup'
+  if (t.players.length === 0) return 'players'
+  return 'tournament'
+}
+
+export default function App() {
+  const [tournament, setTournament] = useState<Tournament | null>(loadTournament)
+  const [_pendingSettings, setPendingSettings] = useState<TournamentSettings | null>(null)
+  const [locale, setLocale] = useState<Locale>(loadLocale)
+  const [displayMode, setDisplayMode] = useState(false)
+  const [showStandings, setShowStandings] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  const screen = deriveScreen(tournament)
+  const sv = locale === 'sv'
+
+  function toggleLocale() {
+    const next: Locale = locale === 'sv' ? 'en' : 'sv'
+    setLocale(next)
+    saveLocale(next)
+    if (tournament) {
+      const updated = { ...tournament, locale: next }
+      setTournament(updated)
+      saveTournament(updated)
+    }
+  }
+
+  // ---- Setup → Players ----
+  function handleSetupNext(settings: TournamentSettings) {
+    setPendingSettings(settings)
+    const shell: Tournament = { settings, players: [], rounds: [], locale }
+    setTournament(shell)
+    saveTournament(shell)
+  }
+
+  // ---- Players → Tournament ----
+  function handlePlayersStart(players: Player[]) {
+    if (!tournament) return
+    const round = scheduleRound(players, tournament.settings, [])
+    const updated: Tournament = { ...tournament, players, rounds: [round] }
+    setTournament(updated)
+    saveTournament(updated)
+  }
+
+  // ---- Score entry ----
+  function handleScoreSubmit(roundIndex: number, gameIndex: number, score: GameScore) {
+    if (!tournament) return
+    const rounds = tournament.rounds.map((r, ri) =>
+      ri !== roundIndex ? r : {
+        ...r,
+        games: r.games.map((g, gi) => gi !== gameIndex ? g : { ...g, score }),
+      }
+    )
+    const updated = { ...tournament, rounds }
+    setTournament(updated)
+    saveTournament(updated)
+  }
+
+  // ---- Next round ----
+  function handleNextRound() {
+    if (!tournament) return
+    const newRound = scheduleRound(tournament.players, tournament.settings, tournament.rounds)
+    const updated = { ...tournament, rounds: [...tournament.rounds, newRound] }
+    setTournament(updated)
+    saveTournament(updated)
+    setShowStandings(false)
+  }
+
+  // ---- Reset ----
+  function handleReset() {
+    clearTournament()
+    setTournament(null)
+    setPendingSettings(null)
+    setConfirmReset(false)
+    setDisplayMode(false)
+    setShowStandings(false)
+  }
+
+  // ---- Render setup ----
+  if (screen === 'setup' || !tournament) {
+    return (
+      <SetupForm
+        locale={locale}
+        onToggleLocale={toggleLocale}
+        onNext={handleSetupNext}
+      />
+    )
+  }
+
+  // ---- Render players ----
+  if (screen === 'players') {
+    return (
+      <PlayerEntry
+        settings={tournament.settings}
+        locale={locale}
+        onBack={() => { clearTournament(); setTournament(null) }}
+        onStart={handlePlayersStart}
+      />
+    )
+  }
+
+  // ---- Tournament view ----
+  const { rounds, players, settings } = tournament
+  const currentRoundIndex = rounds.length - 1
+  const currentRound = rounds[currentRoundIndex]
+  const currentRoundComplete = currentRound.games.every(g => g.score != null)
+  const allRoundsComplete = rounds.length >= settings.numRounds && currentRoundComplete
+  const canStartNextRound = currentRoundComplete && rounds.length < settings.numRounds
+  const standings = calculateStandings(tournament)
+
+  return (
+    <div className={`app ${displayMode ? 'display-mode' : ''}`}>
+      {/* Header */}
+      <div className="tournament-header">
+        <div className="header-left">
+          {!displayMode && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setConfirmReset(true)}>
+              {sv ? '← Ny turnering' : '← New tournament'}
+            </button>
+          )}
+        </div>
+        <div className="header-center">
+          <span className="round-indicator">
+            {sv ? `Omgång ${currentRoundIndex + 1} / ${settings.numRounds}` : `Round ${currentRoundIndex + 1} / ${settings.numRounds}`}
+          </span>
+        </div>
+        <div className="header-right">
+          {!displayMode && (
+            <button className="flag-btn" onClick={toggleLocale} aria-label="Switch language">
+              <FlagIcon locale={locale === 'sv' ? 'en' : 'sv'} size={24} />
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setDisplayMode(d => !d)}>
+            {displayMode ? (sv ? '✎ Redigera' : '✎ Edit') : (sv ? '⛶ Visa' : '⛶ Display')}
+          </button>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      {!displayMode && (
+        <div className="tab-bar">
+          <button className={`tab ${!showStandings ? 'active' : ''}`} onClick={() => setShowStandings(false)}>
+            {sv ? 'Omgång' : 'Round'}
+          </button>
+          <button className={`tab ${showStandings ? 'active' : ''}`} onClick={() => setShowStandings(true)}>
+            {sv ? 'Tabell' : 'Standings'}
+          </button>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="tournament-content">
+        {(displayMode || !showStandings) && (
+          <RoundView
+            round={currentRound}
+            players={players}
+            locale={locale}
+            isComplete={currentRoundComplete}
+            displayMode={displayMode}
+            onScoreSubmit={(gameIdx, score) => handleScoreSubmit(currentRoundIndex, gameIdx, score)}
+          />
+        )}
+
+        {!displayMode && showStandings && standings.some(s => s.gamesPlayed > 0) && (
+          <StandingsTable standings={standings} locale={locale} />
+        )}
+        {!displayMode && showStandings && standings.every(s => s.gamesPlayed === 0) && (
+          <p className="empty-msg">{sv ? 'Inga resultat ännu' : 'No results yet'}</p>
+        )}
+
+        {displayMode && currentRoundComplete && (
+          <StandingsTable standings={standings} locale={locale} />
+        )}
+      </div>
+
+      {/* Action bar */}
+      {!displayMode && (
+        <div className="action-bar">
+          {canStartNextRound && (
+            <button className="btn btn-primary btn-full" onClick={handleNextRound}>
+              {sv ? `Starta omgång ${rounds.length + 1} →` : `Start round ${rounds.length + 1} →`}
+            </button>
+          )}
+          {allRoundsComplete && (
+            <div className="tournament-complete">
+              <h2>{sv ? '🏆 Turneringen är klar!' : '🏆 Tournament complete!'}</h2>
+              <button className="btn btn-primary" onClick={() => setConfirmReset(true)}>
+                {sv ? 'Ny turnering' : 'New tournament'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirm reset dialog */}
+      {confirmReset && (
+        <div className="dialog-overlay" onClick={() => setConfirmReset(false)}>
+          <div className="dialog" onClick={e => e.stopPropagation()}>
+            <h3>{sv ? 'Ny turnering?' : 'New tournament?'}</h3>
+            <p>{sv ? 'All data raderas. Är du säker?' : 'All data will be deleted. Are you sure?'}</p>
+            <div className="dialog-buttons">
+              <button className="btn btn-secondary" onClick={() => setConfirmReset(false)}>
+                {sv ? 'Avbryt' : 'Cancel'}
+              </button>
+              <button className="btn btn-danger" onClick={handleReset}>
+                {sv ? 'Ja, börja om' : 'Yes, reset'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
