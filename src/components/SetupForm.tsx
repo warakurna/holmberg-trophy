@@ -58,7 +58,7 @@ export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
             {(['4v4', '6v6'] as Format[]).map(f => (
               <label key={f} className={`radio-option ${format === f ? 'selected' : ''}`}>
                 <input type="radio" name="format" value={f} checked={format === f} onChange={() => setFormat(f)} />
-                {f === '4v4' ? (sv ? 'Beach 4v4' : 'Beach 4v4') : (sv ? 'Inomhus 6v6' : 'Indoor 6v6')}
+                {f === '4v4' ? (sv ? 'Fyrmanna (4v4)' : '4-a-side (4v4)') : (sv ? 'Inomhus 6v6' : 'Indoor 6v6')}
               </label>
             ))}
           </div>
