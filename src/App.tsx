@@ -7,6 +7,7 @@ import { SetupForm } from './components/SetupForm'
 import { PlayerEntry } from './components/PlayerEntry'
 import { RoundView } from './components/RoundView'
 import { StandingsTable } from './components/StandingsTable'
+import { ScheduleAnalysis } from './components/ScheduleAnalysis'
 import { FlagIcon } from './components/FlagIcon'
 import './App.css'
 
@@ -21,7 +22,7 @@ export default function App() {
   const [_pendingSettings, setPendingSettings] = useState<TournamentSettings | null>(null)
   const [locale, setLocale] = useState<Locale>(loadLocale)
   const [displayMode, setDisplayMode] = useState(false)
-  const [showStandings, setShowStandings] = useState(false)
+  const [activeTab, setActiveTab] = useState<'round' | 'standings' | 'analysis'>('round')
   const [confirmReset, setConfirmReset] = useState(false)
 
   const screen = deriveScreen(tournament)
@@ -69,6 +70,24 @@ export default function App() {
     saveTournament(updated)
   }
 
+  // ---- Score undo ----
+  function handleScoreClear(roundIndex: number, gameIndex: number) {
+    if (!tournament) return
+    const rounds = tournament.rounds.map((r, ri) =>
+      ri !== roundIndex ? r : {
+        ...r,
+        games: r.games.map((g, gi) => {
+          if (gi !== gameIndex) return g
+          const { score: _score, ...rest } = g
+          return rest
+        }),
+      }
+    )
+    const updated = { ...tournament, rounds }
+    setTournament(updated)
+    saveTournament(updated)
+  }
+
   // ---- Next round ----
   function handleNextRound() {
     if (!tournament) return
@@ -76,7 +95,7 @@ export default function App() {
     const updated = { ...tournament, rounds: [...tournament.rounds, newRound] }
     setTournament(updated)
     saveTournament(updated)
-    setShowStandings(false)
+    setActiveTab('round')
   }
 
   // ---- Reset ----
@@ -86,7 +105,7 @@ export default function App() {
     setPendingSettings(null)
     setConfirmReset(false)
     setDisplayMode(false)
-    setShowStandings(false)
+    setActiveTab('round')
   }
 
   // ---- Render setup ----
@@ -136,6 +155,7 @@ export default function App() {
           <span className="round-indicator">
             {sv ? `Omgång ${currentRoundIndex + 1} / ${settings.numRounds}` : `Round ${currentRoundIndex + 1} / ${settings.numRounds}`}
           </span>
+          <span className="build-time-header">{new Date(__BUILD_TIME__).toLocaleTimeString('sv-SE')}</span>
         </div>
         <div className="header-right">
           {!displayMode && (
@@ -152,18 +172,21 @@ export default function App() {
       {/* Tab bar */}
       {!displayMode && (
         <div className="tab-bar">
-          <button className={`tab ${!showStandings ? 'active' : ''}`} onClick={() => setShowStandings(false)}>
+          <button className={`tab ${activeTab === 'round' ? 'active' : ''}`} onClick={() => setActiveTab('round')}>
             {sv ? 'Omgång' : 'Round'}
           </button>
-          <button className={`tab ${showStandings ? 'active' : ''}`} onClick={() => setShowStandings(true)}>
+          <button className={`tab ${activeTab === 'standings' ? 'active' : ''}`} onClick={() => setActiveTab('standings')}>
             {sv ? 'Tabell' : 'Standings'}
+          </button>
+          <button className={`tab ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>
+            {sv ? 'Analys' : 'Analysis'}
           </button>
         </div>
       )}
 
       {/* Content */}
       <div className="tournament-content">
-        {(displayMode || !showStandings) && (
+        {(displayMode || activeTab === 'round') && (
           <RoundView
             round={currentRound}
             players={players}
@@ -171,14 +194,19 @@ export default function App() {
             isComplete={currentRoundComplete}
             displayMode={displayMode}
             onScoreSubmit={(gameIdx, score) => handleScoreSubmit(currentRoundIndex, gameIdx, score)}
+            onScoreClear={(gameIdx) => handleScoreClear(currentRoundIndex, gameIdx)}
           />
         )}
 
-        {!displayMode && showStandings && standings.some(s => s.gamesPlayed > 0) && (
+        {!displayMode && activeTab === 'standings' && standings.some(s => s.gamesPlayed > 0) && (
           <StandingsTable standings={standings} locale={locale} />
         )}
-        {!displayMode && showStandings && standings.every(s => s.gamesPlayed === 0) && (
+        {!displayMode && activeTab === 'standings' && standings.every(s => s.gamesPlayed === 0) && (
           <p className="empty-msg">{sv ? 'Inga resultat ännu' : 'No results yet'}</p>
+        )}
+
+        {!displayMode && activeTab === 'analysis' && (
+          <ScheduleAnalysis tournament={tournament} locale={locale} />
         )}
 
         {displayMode && currentRoundComplete && (

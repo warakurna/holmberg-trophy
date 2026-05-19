@@ -59,6 +59,7 @@ html, body, #root { height: 100%; font-family: system-ui, -apple-system, sans-se
 .header-right { justify-content: flex-end; }
 .header-center { flex: 1; text-align: center; }
 .round-indicator { font-size: 15px; font-weight: 700; }
+.build-time-header { display: block; font-size: 10px; opacity: 0.5; font-weight: 400; }
 
 .tab-bar { display: flex; background: white; border-bottom: 2px solid var(--border); }
 .tab { flex: 1; padding: 10px; border: none; background: none; font-size: 14px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: color 0.15s; }
@@ -147,6 +148,29 @@ html, body, #root { height: 100%; font-family: system-ui, -apple-system, sans-se
 .dialog h3 { font-size: 18px; font-weight: 700; }
 .dialog p { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
 .dialog-buttons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
+/* ---- BUILD STAMP ---- */
+.build-stamp { font-size: 10px; color: var(--text-muted); text-align: right; opacity: 0.5; margin-top: -8px; }
+
+/* ---- UNDO BUTTON ---- */
+.btn-undo { background: none; color: var(--text-muted); border: 1px solid var(--border); padding: 2px 7px; font-size: 12px; line-height: 1.4; margin-left: 4px; }
+.btn-undo:hover { background: #fce4ec; color: var(--danger); border-color: var(--danger); }
+
+/* ---- ANALYSIS ---- */
+.analysis-wrapper { display: flex; flex-direction: column; gap: 8px; }
+.analysis-legend { font-size: 12px; color: var(--text-muted); text-align: center; padding: 4px 0; }
+.pair-with-label { color: var(--primary); font-weight: 700; }
+.pair-against-label { color: var(--accent); font-weight: 700; }
+.analysis-scroll { overflow-x: auto; }
+.analysis-table { border-collapse: collapse; font-size: 12px; background: var(--card-bg); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.analysis-corner { background: var(--primary-dark); }
+.analysis-col-head { background: var(--primary-dark); color: white; padding: 6px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; max-width: 64px; overflow: hidden; text-overflow: ellipsis; border: 1px solid #1e3a8a; }
+.analysis-row-head { background: var(--primary-dark); color: white; padding: 5px 10px; font-size: 11px; font-weight: 700; white-space: nowrap; text-align: left; border: 1px solid #1e3a8a; }
+.analysis-cell-self { background: #e8eaf6; color: var(--text-muted); text-align: center; padding: 5px 8px; border: 1px solid var(--border); }
+.analysis-cell { text-align: center; padding: 5px 8px; border: 1px solid var(--border); white-space: nowrap; }
+.pair-with { color: var(--primary); font-weight: 700; }
+.pair-sep { color: var(--text-muted); margin: 0 1px; font-size: 10px; }
+.pair-against { color: var(--accent); font-weight: 700; }
 
 /* ---- TOURNAMENT COMPLETE ---- */
 .tournament-complete { text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; padding: 8px; }

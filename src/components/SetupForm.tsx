@@ -48,6 +48,7 @@ export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
           <FlagIcon locale={locale === 'sv' ? 'en' : 'sv'} size={28} />
         </button>
       </div>
+      <p className="build-stamp">{new Date(__BUILD_TIME__).toLocaleTimeString('sv-SE')}</p>
 
       <div className="card">
         <h2 className="section-title">{sv ? 'Turneringsinställningar' : 'Tournament Setup'}</h2>

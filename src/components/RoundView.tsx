@@ -8,6 +8,7 @@ interface Props {
   isComplete: boolean
   displayMode: boolean
   onScoreSubmit: (gameIndex: number, score: GameScore) => void
+  onScoreClear?: (gameIndex: number) => void
 }
 
 function playerName(id: number, players: Player[]) {
@@ -21,9 +22,10 @@ interface ScoreInputProps {
   existing?: GameScore
   locale: Locale
   onSubmit: (score: GameScore) => void
+  onClear?: () => void
 }
 
-function ScoreInput({ gameIndex: _gameIndex, team1Label, team2Label, existing, locale, onSubmit }: ScoreInputProps) {
+function ScoreInput({ gameIndex: _gameIndex, team1Label, team2Label, existing, locale, onSubmit, onClear }: ScoreInputProps) {
   const sv = locale === 'sv'
   const [s1, setS1] = useState(existing ? String(existing.score1) : '')
   const [s2, setS2] = useState(existing ? String(existing.score2) : '')
@@ -36,6 +38,11 @@ function ScoreInput({ gameIndex: _gameIndex, team1Label, team2Label, existing, l
         <span className="score-winner">
           {existing.score1 > existing.score2 ? `${team1Label} ${sv ? 'vinner' : 'wins'}` : `${team2Label} ${sv ? 'vinner' : 'wins'}`}
         </span>
+        {onClear && (
+          <button className="btn btn-sm btn-undo" onClick={onClear} title={sv ? 'Ångra resultat' : 'Undo result'}>
+            ✕
+          </button>
+        )}
       </div>
     )
   }
@@ -67,7 +74,7 @@ function ScoreInput({ gameIndex: _gameIndex, team1Label, team2Label, existing, l
   )
 }
 
-export function RoundView({ round, players, locale, isComplete, displayMode, onScoreSubmit }: Props) {
+export function RoundView({ round, players, locale, isComplete, displayMode, onScoreSubmit, onScoreClear }: Props) {
   const sv = locale === 'sv'
 
   return (
@@ -104,6 +111,7 @@ export function RoundView({ round, players, locale, isComplete, displayMode, onS
                 existing={game.score}
                 locale={locale}
                 onSubmit={score => onScoreSubmit(i, score)}
+                onClear={onScoreClear ? () => onScoreClear(i) : undefined}
               />
             )}
             {displayMode && game.score && (
