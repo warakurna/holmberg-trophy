@@ -143,6 +143,13 @@ html, body, #root { height: 100%; font-family: system-ui, -apple-system, sans-se
 .flag-btn { background: none; border: 2px solid transparent; border-radius: 4px; cursor: pointer; padding: 2px; line-height: 0; }
 .flag-btn:hover { border-color: rgba(255,255,255,0.5); }
 
+/* ---- ROUND NAVIGATION ---- */
+.round-nav-bar { display: flex; gap: 8px; align-items: center; }
+.round-nav-bar .btn:first-child,
+.round-nav-bar .btn:nth-child(2) { flex: 1; }
+.btn-ghost-dark { background: none; color: var(--text-muted); border: 1px solid var(--border); font-size: 12px; padding: 5px 10px; white-space: nowrap; }
+.btn-ghost-dark:hover { background: #f0f0f0; }
+
 /* ---- DIALOG ---- */
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .dialog { background: white; border-radius: 12px; padding: 24px; max-width: 320px; width: calc(100vw - 32px); display: flex; flex-direction: column; gap: 12px; }

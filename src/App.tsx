@@ -24,6 +24,12 @@ export default function App() {
   const [displayMode, setDisplayMode] = useState(false)
   const [activeTab, setActiveTab] = useState<'round' | 'standings' | 'analysis'>('round')
   const [confirmReset, setConfirmReset] = useState(false)
+  const [viewRoundIndex, setViewRoundIndex] = useState(() => {
+    const t = loadTournament()
+    if (!t || t.rounds.length === 0) return 0
+    const fi = t.rounds.findIndex(r => r.games.some(g => !g.score))
+    return fi >= 0 ? fi : t.rounds.length - 1
+  })
 
   const screen = deriveScreen(tournament)
   const sv = locale === 'sv'
@@ -116,6 +122,7 @@ export default function App() {
     setConfirmReset(false)
     setDisplayMode(false)
     setActiveTab('round')
+    setViewRoundIndex(0)
   }
 
   // ---- Render setup ----
@@ -156,10 +163,14 @@ export default function App() {
   // ---- Tournament view ----
   const { rounds, players, settings } = tournament
   const firstIncomplete = rounds.findIndex(r => r.games.some(g => !g.score))
-  const currentRoundIndex = firstIncomplete >= 0 ? firstIncomplete : rounds.length - 1
-  const currentRound = rounds[currentRoundIndex]
-  const currentRoundComplete = currentRound.games.every(g => g.score != null)
   const allRoundsComplete = firstIncomplete === -1
+  const activeRoundIndex = allRoundsComplete ? rounds.length - 1 : firstIncomplete
+  const safeViewIndex = Math.min(viewRoundIndex, activeRoundIndex)
+  const currentRound = rounds[safeViewIndex]
+  const currentRoundComplete = currentRound.games.every(g => g.score != null)
+  const canGoPrev = safeViewIndex > 0
+  const canGoNext = safeViewIndex < activeRoundIndex || (currentRoundComplete && safeViewIndex < rounds.length - 1)
+  const nextIsNewRound = safeViewIndex === activeRoundIndex && currentRoundComplete && safeViewIndex < rounds.length - 1
   const standings = calculateStandings(tournament)
 
   return (
@@ -178,7 +189,7 @@ export default function App() {
             <span className="tournament-name-header">{settings.tournamentName}</span>
           )}
           <span className="round-indicator">
-            {sv ? `Omgång ${currentRoundIndex + 1} / ${settings.numRounds}` : `Round ${currentRoundIndex + 1} / ${settings.numRounds}`}
+            {sv ? `Omgång ${safeViewIndex + 1} / ${settings.numRounds}` : `Round ${safeViewIndex + 1} / ${settings.numRounds}`}
           </span>
           <span className="build-time-header">{new Date(__BUILD_TIME__).toLocaleTimeString('sv-SE')}</span>
         </div>
@@ -218,8 +229,8 @@ export default function App() {
             locale={locale}
             isComplete={currentRoundComplete}
             displayMode={displayMode}
-            onScoreSubmit={(gameIdx, score) => handleScoreSubmit(currentRoundIndex, gameIdx, score)}
-            onScoreClear={(gameIdx) => handleScoreClear(currentRoundIndex, gameIdx)}
+            onScoreSubmit={(gameIdx, score) => handleScoreSubmit(safeViewIndex, gameIdx, score)}
+            onScoreClear={(gameIdx) => handleScoreClear(safeViewIndex, gameIdx)}
           />
         )}
 
@@ -255,9 +266,23 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <button className="btn btn-secondary btn-full" onClick={() => downloadSchedulePDF(tournament)}>
-              {sv ? '⬇ Ladda ner schema (PDF)' : '⬇ Download schedule (PDF)'}
-            </button>
+            <div className="round-nav-bar">
+              <button className="btn btn-secondary" disabled={!canGoPrev}
+                onClick={() => setViewRoundIndex(safeViewIndex - 1)}>
+                {sv ? '← Föregående' : '← Previous'}
+              </button>
+              <button
+                className={`btn ${nextIsNewRound ? 'btn-primary' : 'btn-secondary'}`}
+                disabled={!canGoNext}
+                onClick={() => setViewRoundIndex(safeViewIndex + 1)}>
+                {nextIsNewRound
+                  ? (sv ? `Omgång ${safeViewIndex + 2} →` : `Round ${safeViewIndex + 2} →`)
+                  : (sv ? 'Nästa →' : 'Next →')}
+              </button>
+              <button className="btn btn-ghost-dark btn-sm" onClick={() => downloadSchedulePDF(tournament)}>
+                {sv ? '⬇ Schema' : '⬇ Schedule'}
+              </button>
+            </div>
           )}
         </div>
       )}

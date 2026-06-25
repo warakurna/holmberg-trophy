@@ -3,6 +3,10 @@ import autoTable from 'jspdf-autotable'
 import { Tournament, Player } from '../types'
 import { calculateStandings } from './standings'
 
+function toFilename(name: string): string {
+  return name.trim().replace(/[\\/:"*?<>|]+/g, '').replace(/\s+/g, '-') || 'holmberg-trophy'
+}
+
 function visibleNames(ids: number[], players: Player[], botIds: Set<number>, sep = ', '): string {
   return ids
     .filter(id => !botIds.has(id))
@@ -81,7 +85,8 @@ export function downloadSchedulePDF(tournament: Tournament) {
     }
   }
 
-  doc.save(sv ? 'holmberg-schema.pdf' : 'holmberg-schedule.pdf')
+  const base = toFilename(tournament.settings.tournamentName)
+  doc.save(sv ? `${base}-schema.pdf` : `${base}-schedule.pdf`)
 }
 
 export function downloadResultsPDF(tournament: Tournament) {
@@ -175,5 +180,6 @@ export function downloadResultsPDF(tournament: Tournament) {
     margin: { left: 14, right: 14 },
   })
 
-  doc.save(sv ? 'holmberg-slutresultat.pdf' : 'holmberg-results.pdf')
+  const base = toFilename(tournament.settings.tournamentName)
+  doc.save(sv ? `${base}-slutresultat.pdf` : `${base}-results.pdf`)
 }

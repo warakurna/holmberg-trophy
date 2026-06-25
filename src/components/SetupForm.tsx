@@ -15,7 +15,7 @@ function todayISO() {
 
 export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
   const sv = locale === 'sv'
-  const [tournamentName, setTournamentName] = useState('')
+  const [tournamentName, setTournamentName] = useState(() => `Holmberg Trophy ${todayISO()}`)
   const [tournamentDate, setTournamentDate] = useState(todayISO)
   const [format, setFormat] = useState<Format>('4v4')
   const [numCourts, setNumCourts] = useState(3)
@@ -63,7 +63,6 @@ export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
           <div className="form-group" style={{ flex: 2 }}>
             <label className="form-label">{sv ? 'Turneringsnamn' : 'Tournament name'}</label>
             <input className="form-input" type="text" maxLength={60}
-              placeholder={sv ? 'Holmberg Trophy 2025' : 'Holmberg Trophy 2025'}
               value={tournamentName} onChange={e => setTournamentName(e.target.value)} />
           </div>
           <div className="form-group">
