@@ -296,6 +296,14 @@ function scheduleGames(
   return best
 }
 
+export function scheduleAllRounds(players: Player[], settings: TournamentSettings): Round[] {
+  const rounds: Round[] = []
+  for (let i = 0; i < settings.numRounds; i++) {
+    rounds.push(scheduleRound(players, settings, rounds))
+  }
+  return rounds
+}
+
 export interface ScheduleInfo {
   numGames: number
   numSitOuts: number

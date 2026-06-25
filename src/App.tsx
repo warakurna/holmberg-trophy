@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Tournament, TournamentSettings, Player, Locale, Screen, GameScore } from './types'
-import { scheduleRound } from './utils/scheduler'
+import { scheduleAllRounds } from './utils/scheduler'
 import { calculateStandings } from './utils/standings'
 import { saveTournament, loadTournament, clearTournament, saveLocale, loadLocale } from './utils/storage'
+import { downloadSchedulePDF, downloadResultsPDF } from './utils/pdf'
 import { SetupForm } from './components/SetupForm'
 import { PlayerEntry } from './components/PlayerEntry'
 import { RoundView } from './components/RoundView'
@@ -19,7 +20,6 @@ function deriveScreen(t: Tournament | null): Screen {
 
 export default function App() {
   const [tournament, setTournament] = useState<Tournament | null>(loadTournament)
-  const [_pendingSettings, setPendingSettings] = useState<TournamentSettings | null>(null)
   const [locale, setLocale] = useState<Locale>(loadLocale)
   const [displayMode, setDisplayMode] = useState(false)
   const [activeTab, setActiveTab] = useState<'round' | 'standings' | 'analysis'>('round')
@@ -41,13 +41,12 @@ export default function App() {
 
   // ---- Setup → Players ----
   function handleSetupNext(settings: TournamentSettings) {
-    setPendingSettings(settings)
     const shell: Tournament = { settings, players: [], rounds: [], locale }
     setTournament(shell)
     saveTournament(shell)
   }
 
-  // ---- Players → Tournament ----
+  // ---- Players → Tournament (generates full schedule) ----
   function handlePlayersStart(realPlayers: Player[]) {
     if (!tournament) return
     const { sitOutMode, numCourts } = tournament.settings
@@ -63,10 +62,19 @@ export default function App() {
       }))
       players = [...realPlayers, ...bots]
     }
-    const round = scheduleRound(players, tournament.settings, [])
-    const updated: Tournament = { ...tournament, players, rounds: [round] }
-    setTournament(updated)
-    saveTournament(updated)
+
+    // Save shell with players but empty rounds to trigger loading screen render
+    const shell: Tournament = { ...tournament, players, rounds: [] }
+    setTournament(shell)
+    saveTournament(shell)
+
+    // Defer heavy SA computation so the loading screen has a chance to paint
+    setTimeout(() => {
+      const rounds = scheduleAllRounds(players, shell.settings)
+      const updated: Tournament = { ...shell, rounds }
+      setTournament(updated)
+      saveTournament(updated)
+    }, 50)
   }
 
   // ---- Score entry ----
@@ -101,21 +109,10 @@ export default function App() {
     saveTournament(updated)
   }
 
-  // ---- Next round ----
-  function handleNextRound() {
-    if (!tournament) return
-    const newRound = scheduleRound(tournament.players, tournament.settings, tournament.rounds)
-    const updated = { ...tournament, rounds: [...tournament.rounds, newRound] }
-    setTournament(updated)
-    saveTournament(updated)
-    setActiveTab('round')
-  }
-
   // ---- Reset ----
   function handleReset() {
     clearTournament()
     setTournament(null)
-    setPendingSettings(null)
     setConfirmReset(false)
     setDisplayMode(false)
     setActiveTab('round')
@@ -144,13 +141,25 @@ export default function App() {
     )
   }
 
+  // ---- Loading: schedule being generated ----
+  if (tournament.rounds.length === 0) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-content">
+          <div className="loading-spinner" />
+          <p className="loading-msg">{sv ? 'Genererar schema…' : 'Generating schedule…'}</p>
+        </div>
+      </div>
+    )
+  }
+
   // ---- Tournament view ----
   const { rounds, players, settings } = tournament
-  const currentRoundIndex = rounds.length - 1
+  const firstIncomplete = rounds.findIndex(r => r.games.some(g => !g.score))
+  const currentRoundIndex = firstIncomplete >= 0 ? firstIncomplete : rounds.length - 1
   const currentRound = rounds[currentRoundIndex]
   const currentRoundComplete = currentRound.games.every(g => g.score != null)
-  const allRoundsComplete = rounds.length >= settings.numRounds && currentRoundComplete
-  const canStartNextRound = currentRoundComplete && rounds.length < settings.numRounds
+  const allRoundsComplete = firstIncomplete === -1
   const standings = calculateStandings(tournament)
 
   return (
@@ -160,7 +169,7 @@ export default function App() {
         <div className="header-left">
           {!displayMode && (
             <button className="btn btn-ghost btn-sm" onClick={() => setConfirmReset(true)}>
-              {sv ? '← Ny turnering' : '← New tournament'}
+              {sv ? '← Ny' : '← New'}
             </button>
           )}
         </div>
@@ -230,18 +239,22 @@ export default function App() {
       {/* Action bar */}
       {!displayMode && (
         <div className="action-bar">
-          {canStartNextRound && (
-            <button className="btn btn-primary btn-full" onClick={handleNextRound}>
-              {sv ? `Starta omgång ${rounds.length + 1} →` : `Start round ${rounds.length + 1} →`}
-            </button>
-          )}
-          {allRoundsComplete && (
+          {allRoundsComplete ? (
             <div className="tournament-complete">
               <h2>{sv ? '🏆 Turneringen är klar!' : '🏆 Tournament complete!'}</h2>
-              <button className="btn btn-primary" onClick={() => setConfirmReset(true)}>
-                {sv ? 'Ny turnering' : 'New tournament'}
-              </button>
+              <div className="complete-actions">
+                <button className="btn btn-primary btn-full" onClick={() => downloadResultsPDF(tournament)}>
+                  {sv ? '⬇ Ladda ner slutresultat (PDF)' : '⬇ Download final results (PDF)'}
+                </button>
+                <button className="btn btn-secondary btn-full" onClick={() => setConfirmReset(true)}>
+                  {sv ? 'Ny turnering' : 'New tournament'}
+                </button>
+              </div>
             </div>
+          ) : (
+            <button className="btn btn-secondary btn-full" onClick={() => downloadSchedulePDF(tournament)}>
+              {sv ? '⬇ Ladda ner schema (PDF)' : '⬇ Download schedule (PDF)'}
+            </button>
           )}
         </div>
       )}
