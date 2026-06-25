@@ -3,15 +3,27 @@ import autoTable from 'jspdf-autotable'
 import { Tournament, Player } from '../types'
 import { calculateStandings } from './standings'
 
-function visibleNames(ids: number[], players: Player[], botIds: Set<number>): string {
+function visibleNames(ids: number[], players: Player[], botIds: Set<number>, sep = ', '): string {
   return ids
     .filter(id => !botIds.has(id))
     .map(id => players.find(p => p.id === id)?.name ?? `#${id}`)
-    .join(', ')
+    .join(sep)
 }
 
 function lastY(doc: jsPDF): number {
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
+}
+
+function pdfHeader(doc: jsPDF, tournament: Tournament, subtitle: string) {
+  const { tournamentName, tournamentDate } = tournament.settings
+  const title = tournamentName || 'Holmberg Trophy'
+  doc.setFontSize(20)
+  doc.setFont('helvetica', 'bold')
+  doc.text(title, 105, 18, { align: 'center' })
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'normal')
+  const datePart = tournamentDate ? `  ·  ${tournamentDate}` : ''
+  doc.text(subtitle + datePart, 105, 26, { align: 'center' })
 }
 
 export function downloadSchedulePDF(tournament: Tournament) {
@@ -19,12 +31,7 @@ export function downloadSchedulePDF(tournament: Tournament) {
   const sv = tournament.locale === 'sv'
   const botIds = new Set(tournament.players.filter(p => p.isBot).map(p => p.id))
 
-  doc.setFontSize(20)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Holmberg Trophy', 105, 18, { align: 'center' })
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'normal')
-  doc.text(sv ? 'Spelschema' : 'Tournament Schedule', 105, 26, { align: 'center' })
+  pdfHeader(doc, tournament, sv ? 'Spelschema' : 'Tournament Schedule')
 
   let y = 36
 
@@ -38,8 +45,8 @@ export function downloadSchedulePDF(tournament: Tournament) {
     y += 5
 
     const body = round.games.map(g => {
-      const t1 = visibleNames(g.team1.playerIds, tournament.players, botIds)
-      const t2 = visibleNames(g.team2.playerIds, tournament.players, botIds)
+      const t1 = visibleNames(g.team1.playerIds, tournament.players, botIds, '\n')
+      const t2 = visibleNames(g.team2.playerIds, tournament.players, botIds, '\n')
       const t1size = g.team1.playerIds.filter(id => !botIds.has(id)).length
       const t2size = g.team2.playerIds.filter(id => !botIds.has(id)).length
       const label = t1size !== t2size ? `(${t1size}v${t2size})` : 'vs'
@@ -82,12 +89,7 @@ export function downloadResultsPDF(tournament: Tournament) {
   const sv = tournament.locale === 'sv'
   const botIds = new Set(tournament.players.filter(p => p.isBot).map(p => p.id))
 
-  doc.setFontSize(20)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Holmberg Trophy', 105, 18, { align: 'center' })
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'normal')
-  doc.text(sv ? 'Slutresultat' : 'Final Results', 105, 26, { align: 'center' })
+  pdfHeader(doc, tournament, sv ? 'Slutresultat' : 'Final Results')
 
   let y = 36
 
@@ -101,8 +103,8 @@ export function downloadResultsPDF(tournament: Tournament) {
     y += 5
 
     const body = round.games.map(g => {
-      const t1 = visibleNames(g.team1.playerIds, tournament.players, botIds)
-      const t2 = visibleNames(g.team2.playerIds, tournament.players, botIds)
+      const t1 = visibleNames(g.team1.playerIds, tournament.players, botIds, '\n')
+      const t2 = visibleNames(g.team2.playerIds, tournament.players, botIds, '\n')
       const score = g.score ? `${g.score.score1} – ${g.score.score2}` : '–'
       return [`${sv ? 'Plan' : 'Court'} ${g.court}`, t1, score, t2]
     })

@@ -174,6 +174,9 @@ export default function App() {
           )}
         </div>
         <div className="header-center">
+          {settings.tournamentName && (
+            <span className="tournament-name-header">{settings.tournamentName}</span>
+          )}
           <span className="round-indicator">
             {sv ? `Omgång ${currentRoundIndex + 1} / ${settings.numRounds}` : `Round ${currentRoundIndex + 1} / ${settings.numRounds}`}
           </span>

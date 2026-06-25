@@ -9,8 +9,14 @@ interface Props {
   onNext: (settings: TournamentSettings) => void
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
   const sv = locale === 'sv'
+  const [tournamentName, setTournamentName] = useState('')
+  const [tournamentDate, setTournamentDate] = useState(todayISO)
   const [format, setFormat] = useState<Format>('4v4')
   const [numCourts, setNumCourts] = useState(3)
   const [numRounds, setNumRounds] = useState(6)
@@ -19,7 +25,7 @@ export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
 
   const playersPerTeam = format === '4v4' ? 4 : 6
 
-  const settings: TournamentSettings = { format, playersPerTeam, numCourts, numRounds, numPlayers, sitOutMode }
+  const settings: TournamentSettings = { format, playersPerTeam, numCourts, numRounds, numPlayers, sitOutMode, tournamentName, tournamentDate }
   const info = getScheduleInfo(settings)
 
   const minPlayers = 2 * playersPerTeam
@@ -52,6 +58,20 @@ export function SetupForm({ locale, onToggleLocale, onNext }: Props) {
 
       <div className="card">
         <h2 className="section-title">{sv ? 'Turneringsinställningar' : 'Tournament Setup'}</h2>
+
+        <div className="form-row">
+          <div className="form-group" style={{ flex: 2 }}>
+            <label className="form-label">{sv ? 'Turneringsnamn' : 'Tournament name'}</label>
+            <input className="form-input" type="text" maxLength={60}
+              placeholder={sv ? 'Holmberg Trophy 2025' : 'Holmberg Trophy 2025'}
+              value={tournamentName} onChange={e => setTournamentName(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{sv ? 'Datum' : 'Date'}</label>
+            <input className="form-input" type="date" value={tournamentDate}
+              onChange={e => setTournamentDate(e.target.value)} />
+          </div>
+        </div>
 
         <div className="form-group">
           <label className="form-label">{sv ? 'Format' : 'Format'}</label>

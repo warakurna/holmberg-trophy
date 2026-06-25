@@ -10,6 +10,8 @@ export interface TournamentSettings {
   numRounds: number
   numPlayers: number
   sitOutMode: SitOutMode
+  tournamentName: string
+  tournamentDate: string  // ISO date: YYYY-MM-DD
 }
 
 export interface Player {

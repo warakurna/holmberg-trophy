@@ -58,6 +58,7 @@ html, body, #root { height: 100%; font-family: system-ui, -apple-system, sans-se
 .header-left, .header-right { display: flex; align-items: center; gap: 6px; min-width: 100px; }
 .header-right { justify-content: flex-end; }
 .header-center { flex: 1; text-align: center; }
+.tournament-name-header { display: block; font-size: 11px; opacity: 0.75; font-weight: 600; letter-spacing: 0.03em; }
 .round-indicator { font-size: 15px; font-weight: 700; }
 .build-time-header { display: block; font-size: 10px; opacity: 0.5; font-weight: 400; }
 
