@@ -15,6 +15,7 @@ export interface TournamentSettings {
 export interface Player {
   id: number
   name: string
+  isBot?: boolean
 }
 
 export interface Team {

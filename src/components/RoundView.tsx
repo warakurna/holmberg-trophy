@@ -76,14 +76,17 @@ function ScoreInput({ gameIndex: _gameIndex, team1Label, team2Label, existing, l
 
 export function RoundView({ round, players, locale, isComplete, displayMode, onScoreSubmit, onScoreClear }: Props) {
   const sv = locale === 'sv'
+  const botIds = new Set(players.filter(p => p.isBot).map(p => p.id))
 
   return (
     <div className="round-view">
       {round.games.map((game, i) => {
-        const t1Names = game.team1.playerIds.map(id => playerName(id, players))
-        const t2Names = game.team2.playerIds.map(id => playerName(id, players))
-        const t1Size = game.team1.playerIds.length
-        const t2Size = game.team2.playerIds.length
+        const t1Ids = game.team1.playerIds.filter(id => !botIds.has(id))
+        const t2Ids = game.team2.playerIds.filter(id => !botIds.has(id))
+        const t1Names = t1Ids.map(id => playerName(id, players))
+        const t2Names = t2Ids.map(id => playerName(id, players))
+        const t1Size = t1Ids.length
+        const t2Size = t2Ids.length
         const unevenLabel = t1Size !== t2Size ? ` (${t1Size}v${t2Size})` : ''
 
         return (

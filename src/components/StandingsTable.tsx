@@ -20,7 +20,7 @@ export function StandingsTable({ standings, locale }: Props) {
             <th title={sv ? 'Vinster' : 'Wins'}>W</th>
             <th title={sv ? 'Förluster' : 'Losses'}>L</th>
             <th title={sv ? 'Poängdifferens' : 'Point diff'}>+/-</th>
-            <th title={sv ? 'Turneringspoäng' : 'Points'}>Pts</th>
+            <th title={sv ? 'Genomsnittspoäng per match' : 'Avg points per game'}>Pts/G</th>
           </tr>
         </thead>
         <tbody>
@@ -34,7 +34,7 @@ export function StandingsTable({ standings, locale }: Props) {
               <td className={s.differential >= 0 ? 'positive' : 'negative'}>
                 {s.differential > 0 ? '+' : ''}{s.differential}
               </td>
-              <td className="col-pts">{s.tournamentPoints}</td>
+              <td className="col-pts">{s.avgPoints.toFixed(2)}</td>
             </tr>
           ))}
         </tbody>

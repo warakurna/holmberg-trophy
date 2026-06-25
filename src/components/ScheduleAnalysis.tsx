@@ -12,7 +12,7 @@ function shortName(p: Player) {
 
 export function ScheduleAnalysis({ tournament, locale }: Props) {
   const sv = locale === 'sv'
-  const { players } = tournament
+  const players = tournament.players.filter(p => !p.isBot)
   const stats = analyzeSchedule(tournament)
 
   function getPair(a: number, b: number) {

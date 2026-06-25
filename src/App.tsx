@@ -48,8 +48,21 @@ export default function App() {
   }
 
   // ---- Players → Tournament ----
-  function handlePlayersStart(players: Player[]) {
+  function handlePlayersStart(realPlayers: Player[]) {
     if (!tournament) return
+    const { sitOutMode, numCourts } = tournament.settings
+    let players = realPlayers
+    if (sitOutMode === 'flexible') {
+      const numTeams = numCourts * 2
+      const remainder = realPlayers.length % numTeams
+      const numBots = remainder === 0 ? 0 : numTeams - remainder
+      const bots: Player[] = Array.from({ length: numBots }, (_, i) => ({
+        id: realPlayers.length + i,
+        name: `Bot ${i + 1}`,
+        isBot: true,
+      }))
+      players = [...realPlayers, ...bots]
+    }
     const round = scheduleRound(players, tournament.settings, [])
     const updated: Tournament = { ...tournament, players, rounds: [round] }
     setTournament(updated)

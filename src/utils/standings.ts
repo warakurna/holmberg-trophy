@@ -9,6 +9,8 @@ export interface PlayerStanding {
   pointsAgainst: number
   differential: number
   tournamentPoints: number
+  avgPoints: number
+  avgDifferential: number
 }
 
 export function calculateStandings(tournament: Tournament): PlayerStanding[] {
@@ -24,6 +26,8 @@ export function calculateStandings(tournament: Tournament): PlayerStanding[] {
       pointsAgainst: 0,
       differential: 0,
       tournamentPoints: 0,
+      avgPoints: 0,
+      avgDifferential: 0,
     }])
   )
 
@@ -52,9 +56,15 @@ export function calculateStandings(tournament: Tournament): PlayerStanding[] {
     }
   }
 
-  return [...map.values()].sort((a, b) => {
-    if (b.tournamentPoints !== a.tournamentPoints) return b.tournamentPoints - a.tournamentPoints
-    if (b.differential !== a.differential) return b.differential - a.differential
+  const standings = [...map.values()]
+  for (const s of standings) {
+    s.avgPoints = s.gamesPlayed > 0 ? s.tournamentPoints / s.gamesPlayed : 0
+    s.avgDifferential = s.gamesPlayed > 0 ? s.differential / s.gamesPlayed : 0
+  }
+
+  return standings.filter(s => !s.player.isBot).sort((a, b) => {
+    if (b.avgPoints !== a.avgPoints) return b.avgPoints - a.avgPoints
+    if (b.avgDifferential !== a.avgDifferential) return b.avgDifferential - a.avgDifferential
     return b.pointsFor - a.pointsFor
   })
 }

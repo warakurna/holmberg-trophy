@@ -1,5 +1,10 @@
 import { Player, Round, Game, TournamentSettings } from '../types'
 
+// Per real player on a short team: penalty scaled by how many short-team rounds they've had
+const SHORT_FAIRNESS_WEIGHT = 60
+// Per game where exactly one team has a bot (prefer S vs S, F vs F over S vs F)
+const MIXED_GAME_PENALTY = 500
+
 export function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
@@ -46,6 +51,24 @@ function getSitOutCounts(players: Player[], rounds: Round[]): Map<number, number
   return counts
 }
 
+// Counts how many rounds each real player has spent on a team with any bot (unified, not per-bot)
+function computeShortCount(realPlayerIds: number[], rounds: Round[], botIdSet: Set<number>): Map<number, number> {
+  const counts = new Map<number, number>(realPlayerIds.map(id => [id, 0]))
+  for (const round of rounds) {
+    for (const game of round.games) {
+      for (const team of [game.team1, game.team2]) {
+        if (team.playerIds.some(id => botIdSet.has(id))) {
+          for (const pid of team.playerIds) {
+            if (!botIdSet.has(pid) && counts.has(pid))
+              counts.set(pid, counts.get(pid)! + 1)
+          }
+        }
+      }
+    }
+  }
+  return counts
+}
+
 // Teammate repeat: avoidable → penalise hard but not so extreme that SA sacrifices opponents
 function tmPenalty(count: number): number {
   if (count === 0) return 0
@@ -61,40 +84,67 @@ function oppPenalty(count: number): number {
 }
 
 // Cross-role penalty — reflects user preference: 1/2 << 2/0 << 2/1
-// 1/1 total=2: tiny extra so 2/1 costs more than 2/0, but 1/2 still much cheaper than 2/0
-// 2/1 or 1/2 total=3: large extra, essentially forbidden
 function crossPenalty(tm: number, opp: number): number {
   if (tm === 0 || opp === 0) return 0
   const total = tm + opp
-  if (total === 2) return 10             // 1/1 → 2/1=110, 1/2=40 (1/2 is much cheaper than 2/0=100)
-  if (total === 3) return 300            // 2/1 or 1/2 → further meetings near-forbidden
-  return 2000                            // 2/2+: forbidden
+  if (total === 2) return 10
+  if (total === 3) return 300
+  return 2000
+}
+
+function scoreOneGame(
+  game: [number[], number[]],
+  teammates: number[][],
+  opponents: number[][],
+  botIdSet?: Set<number>,
+  shortCount?: Map<number, number>
+): number {
+  let score = 0
+  const [t1, t2] = game
+
+  for (let i = 0; i < t1.length; i++)
+    for (let j = i + 1; j < t1.length; j++) {
+      const tm = teammates[t1[i]][t1[j]], opp = opponents[t1[i]][t1[j]]
+      score += tmPenalty(tm) + crossPenalty(tm, opp)
+    }
+  for (let i = 0; i < t2.length; i++)
+    for (let j = i + 1; j < t2.length; j++) {
+      const tm = teammates[t2[i]][t2[j]], opp = opponents[t2[i]][t2[j]]
+      score += tmPenalty(tm) + crossPenalty(tm, opp)
+    }
+  for (const p1 of t1)
+    for (const p2 of t2) {
+      const tm = teammates[p1][p2], opp = opponents[p1][p2]
+      score += oppPenalty(opp) + crossPenalty(tm, opp)
+    }
+
+  if (botIdSet && shortCount) {
+    const t1HasBot = t1.some(id => botIdSet.has(id))
+    const t2HasBot = t2.some(id => botIdSet.has(id))
+
+    // Short-team fairness: penalise high-shortCount real players being on a bot team
+    if (t1HasBot)
+      for (const pid of t1)
+        if (!botIdSet.has(pid)) score += (shortCount.get(pid) ?? 0) * SHORT_FAIRNESS_WEIGHT
+    if (t2HasBot)
+      for (const pid of t2)
+        if (!botIdSet.has(pid)) score += (shortCount.get(pid) ?? 0) * SHORT_FAIRNESS_WEIGHT
+
+    // Mixed-game penalty: strongly prefer S vs S and F vs F over S vs F
+    if (t1HasBot !== t2HasBot) score += MIXED_GAME_PENALTY
+  }
+
+  return score
 }
 
 function scoreGames(
   games: [number[], number[]][],
   teammates: number[][],
-  opponents: number[][]
+  opponents: number[][],
+  botIdSet?: Set<number>,
+  shortCount?: Map<number, number>
 ): number {
-  let score = 0
-  for (const [t1, t2] of games) {
-    for (let i = 0; i < t1.length; i++)
-      for (let j = i + 1; j < t1.length; j++) {
-        const tm = teammates[t1[i]][t1[j]], opp = opponents[t1[i]][t1[j]]
-        score += tmPenalty(tm) + crossPenalty(tm, opp)
-      }
-    for (let i = 0; i < t2.length; i++)
-      for (let j = i + 1; j < t2.length; j++) {
-        const tm = teammates[t2[i]][t2[j]], opp = opponents[t2[i]][t2[j]]
-        score += tmPenalty(tm) + crossPenalty(tm, opp)
-      }
-    for (const p1 of t1)
-      for (const p2 of t2) {
-        const tm = teammates[p1][p2], opp = opponents[p1][p2]
-        score += oppPenalty(opp) + crossPenalty(tm, opp)
-      }
-  }
-  return score
+  return games.reduce((sum, game) => sum + scoreOneGame(game, teammates, opponents, botIdSet, shortCount), 0)
 }
 
 // Greedy initialization: assign players to minimize immediate cost for each slot
@@ -102,7 +152,9 @@ function greedyInitGames(
   playerIds: number[],
   gameSizes: [number, number][],
   teammates: number[][],
-  opponents: number[][]
+  opponents: number[][],
+  botIdSet?: Set<number>,
+  shortCount?: Map<number, number>
 ): [number[], number[]][] {
   const games: [number[], number[]][] = gameSizes.map(() => [[], []])
   const avail = new Set(shuffle([...playerIds]))
@@ -123,6 +175,11 @@ function greedyInitGames(
               cost += oppPenalty(opp) + crossPenalty(tm, opp)
             }
           }
+          // Short-team fairness: penalise high-shortCount real players in bot teams
+          if (botIdSet && shortCount && !botIdSet.has(pid)) {
+            if (games[g][side].some(id => botIdSet.has(id)))
+              cost += (shortCount.get(pid) ?? 0) * SHORT_FAIRNESS_WEIGHT
+          }
           if (cost < bestCost) { bestCost = cost; best = pid }
         }
         if (best === -1) best = avail.values().next().value as number
@@ -134,33 +191,14 @@ function greedyInitGames(
   return games
 }
 
-function scoreOneGame(game: [number[], number[]], teammates: number[][], opponents: number[][]): number {
-  let score = 0
-  const [t1, t2] = game
-  for (let i = 0; i < t1.length; i++)
-    for (let j = i + 1; j < t1.length; j++) {
-      const tm = teammates[t1[i]][t1[j]], opp = opponents[t1[i]][t1[j]]
-      score += tmPenalty(tm) + crossPenalty(tm, opp)
-    }
-  for (let i = 0; i < t2.length; i++)
-    for (let j = i + 1; j < t2.length; j++) {
-      const tm = teammates[t2[i]][t2[j]], opp = opponents[t2[i]][t2[j]]
-      score += tmPenalty(tm) + crossPenalty(tm, opp)
-    }
-  for (const p1 of t1)
-    for (const p2 of t2) {
-      const tm = teammates[p1][p2], opp = opponents[p1][p2]
-      score += oppPenalty(opp) + crossPenalty(tm, opp)
-    }
-  return score
-}
-
 // Simulated annealing over the full round (teams + game pairings jointly)
 function simulatedAnnealing(
   initial: [number[], number[]][],
   teammates: number[][],
   opponents: number[][],
-  maxIter: number
+  maxIter: number,
+  botIdSet?: Set<number>,
+  shortCount?: Map<number, number>
 ): [number[], number[]][] {
   // Build flat slot list for O(1) random access: [gameIdx, side, posInTeam]
   type Slot = [number, 0 | 1, number]
@@ -172,7 +210,10 @@ function simulatedAnnealing(
   const n = slots.length
 
   const games = initial.map(([t1, t2]) => [[...t1], [...t2]] as [number[], number[]])
-  let currentScore = scoreGames(games, teammates, opponents)
+
+  // Cache per-game scores to compute deltas without rescoring all games
+  const gameScores = games.map(game => scoreOneGame(game, teammates, opponents, botIdSet, shortCount))
+  let currentScore = gameScores.reduce((a, b) => a + b, 0)
   let best = games.map(([t1, t2]) => [[...t1], [...t2]] as [number[], number[]])
   let bestScore = currentScore
   if (bestScore === 0) return best
@@ -191,50 +232,38 @@ function simulatedAnnealing(
     // Same team: swapping positions doesn't change score
     if (g1 === g2 && s1 === s2) { temp *= cooling; continue }
 
+    // Perform the swap, evaluate, then undo if rejected
+    ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
+
     let delta: number
     if (g1 === g2) {
-      // Same game, different side: rescore the one affected game
-      const before = scoreOneGame(games[g1], teammates, opponents)
-      ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
-      delta = scoreOneGame(games[g1], teammates, opponents) - before
-      ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
+      // Same game, different sides: rescore the one affected game
+      const newScore = scoreOneGame(games[g1], teammates, opponents, botIdSet, shortCount)
+      delta = newScore - gameScores[g1]
+      if (delta <= 0 || Math.random() < Math.exp(-delta / temp)) {
+        gameScores[g1] = newScore
+        currentScore += delta
+      } else {
+        ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
+      }
     } else {
-      // Different games: compute delta from only the affected player pairs (O(k) vs O(k²×games))
-      const A = games[g1][s1][p1]
-      const B = games[g2][s2][p2]
-      const oS1 = (1 - s1) as 0 | 1
-      const oS2 = (1 - s2) as 0 | 1
-      let oldA = 0, newB = 0
-      for (const pid of games[g1][s1]) {
-        if (pid === A) continue
-        oldA += tmPenalty(teammates[A][pid]) + crossPenalty(teammates[A][pid], opponents[A][pid])
-        newB += tmPenalty(teammates[B][pid]) + crossPenalty(teammates[B][pid], opponents[B][pid])
+      // Different games: rescore both affected games
+      const newG1 = scoreOneGame(games[g1], teammates, opponents, botIdSet, shortCount)
+      const newG2 = scoreOneGame(games[g2], teammates, opponents, botIdSet, shortCount)
+      delta = (newG1 + newG2) - (gameScores[g1] + gameScores[g2])
+      if (delta <= 0 || Math.random() < Math.exp(-delta / temp)) {
+        gameScores[g1] = newG1
+        gameScores[g2] = newG2
+        currentScore += delta
+      } else {
+        ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
       }
-      for (const pid of games[g1][oS1]) {
-        oldA += oppPenalty(opponents[A][pid]) + crossPenalty(teammates[A][pid], opponents[A][pid])
-        newB += oppPenalty(opponents[B][pid]) + crossPenalty(teammates[B][pid], opponents[B][pid])
-      }
-      let oldB = 0, newA = 0
-      for (const pid of games[g2][s2]) {
-        if (pid === B) continue
-        oldB += tmPenalty(teammates[B][pid]) + crossPenalty(teammates[B][pid], opponents[B][pid])
-        newA += tmPenalty(teammates[A][pid]) + crossPenalty(teammates[A][pid], opponents[A][pid])
-      }
-      for (const pid of games[g2][oS2]) {
-        oldB += oppPenalty(opponents[B][pid]) + crossPenalty(teammates[B][pid], opponents[B][pid])
-        newA += oppPenalty(opponents[A][pid]) + crossPenalty(teammates[A][pid], opponents[A][pid])
-      }
-      delta = (newB + newA) - (oldA + oldB)
     }
 
-    if (delta <= 0 || Math.random() < Math.exp(-delta / temp)) {
-      ;[games[g1][s1][p1], games[g2][s2][p2]] = [games[g2][s2][p2], games[g1][s1][p1]]
-      currentScore += delta
-      if (currentScore < bestScore) {
-        bestScore = currentScore
-        for (let g = 0; g < best.length; g++) { best[g][0] = [...games[g][0]]; best[g][1] = [...games[g][1]] }
-        if (bestScore === 0) return best
-      }
+    if (currentScore < bestScore) {
+      bestScore = currentScore
+      for (let g = 0; g < best.length; g++) { best[g][0] = [...games[g][0]]; best[g][1] = [...games[g][1]] }
+      if (bestScore === 0) return best
     }
     temp *= cooling
   }
@@ -245,7 +274,9 @@ function scheduleGames(
   playerIds: number[],
   gameSizes: [number, number][],
   teammates: number[][],
-  opponents: number[][]
+  opponents: number[][],
+  botIdSet?: Set<number>,
+  shortCount?: Map<number, number>
 ): [number[], number[]][] {
   const RESTARTS = 80
   const SA_ITERS = 20000
@@ -253,9 +284,9 @@ function scheduleGames(
   let bestScore = Infinity
 
   for (let r = 0; r < RESTARTS; r++) {
-    const initial = greedyInitGames(playerIds, gameSizes, teammates, opponents)
-    const improved = simulatedAnnealing(initial, teammates, opponents, SA_ITERS)
-    const score = scoreGames(improved, teammates, opponents)
+    const initial = greedyInitGames(playerIds, gameSizes, teammates, opponents, botIdSet, shortCount)
+    const improved = simulatedAnnealing(initial, teammates, opponents, SA_ITERS, botIdSet, shortCount)
+    const score = scoreGames(improved, teammates, opponents, botIdSet, shortCount)
     if (score < bestScore) {
       bestScore = score
       best = improved.map(([t1, t2]) => [[...t1], [...t2]] as [number[], number[]])
@@ -289,6 +320,21 @@ export function scheduleRound(
   const n = players.length
   const { teammates, opponents } = buildHistory(n, completedRounds)
   const sitOutCounts = getSitOutCounts(players, completedRounds)
+
+  // Forbid bot-bot teammate pairings by pre-seeding their count to 2 (triggers 3000 "forbidden" penalty)
+  const botIdSet = new Set(players.filter(p => p.isBot).map(p => p.id))
+  const botIds = [...botIdSet]
+  for (let i = 0; i < botIds.length; i++)
+    for (let j = i + 1; j < botIds.length; j++) {
+      teammates[botIds[i]][botIds[j]] = 2
+      teammates[botIds[j]][botIds[i]] = 2
+    }
+
+  // Unified short-team count: total rounds each real player has spent on a bot team
+  const realPlayerIds = players.filter(p => !p.isBot).map(p => p.id)
+  const shortCount = botIdSet.size > 0
+    ? computeShortCount(realPlayerIds, completedRounds, botIdSet)
+    : undefined
 
   let activePlayers: Player[]
   let sitOutPlayers: Player[]
@@ -327,7 +373,7 @@ export function scheduleRound(
     gameSizes = Array.from({ length: numCourts }, (_, i) => [sizes[i * 2], sizes[i * 2 + 1]] as [number, number])
   }
 
-  const games = scheduleGames(activeIds, gameSizes, teammates, opponents)
+  const games = scheduleGames(activeIds, gameSizes, teammates, opponents, botIdSet.size > 0 ? botIdSet : undefined, shortCount)
 
   const roundGames: Game[] = games.map(([t1, t2], i) => ({
     court: i + 1,
